@@ -1,0 +1,174 @@
+# This will deploy the monitoring stack within Kubernetes:
+
+# Prometheus will scrape and store time-series metrics from Flask and TF Serving
+# Grafana will provide visual dashboards for real-time MLOps monitoring using the 
+
+# Prometheus data
+# Both of these together provide the monitoring layer I described in my paper
+
+# Prometheus ConfigMap
+
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: object-detection
+  labels:
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: "flask-app"
+        metrics_path: "/prometheus_metrics"
+        static_configs:
+          - targets: ["flask-app:5000"]
+
+      - job_name: "tf-serving"
+        metrics_path: "/monitoring/prometheus/metrics"
+        static_configs:
+          - targets: ["tf-serving:8501"]
+
+      - job_name: "prometheus"
+        static_configs:
+          - targets: ["localhost:9090"]
+          
+# Prometheus Deployment
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: object-detection
+  labels:
+    app: prometheus
+    component: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        component: monitoring
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.51.0
+          ports:
+            - containerPort: 9090
+              name: http
+          args:
+            # Point Prometheus to the config file from the ConfigMap
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            # Setting the period in which the data gets deleted after (7 days)
+            - "--storage.tsdb.retention.time=7d"
+          volumeMounts:
+            # Mount the ConfigMap as the config file
+            - name: prometheus-config
+              mountPath: /etc/prometheus
+            # Persistent storage for the metrics data
+            - name: prometheus-data
+              mountPath: /prometheus
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+        - name: prometheus-data
+          emptyDir: {}
+
+# Prometheus Service. This exposes the Prometheus UI and API within the cluster
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: object-detection
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP
+
+# Grafana Deployment
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: object-detection
+  labels:
+    app: grafana
+    component: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+        component: monitoring
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.4.0
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Viewer"
+            - name: GF_SECURITY_ALLOW_EMBEDDING
+              value: "true"
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "false"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+# Grafana Service exposes Grafana dashboard externally via NodePort
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: object-detection
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 30300
+  type: NodePort

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection - Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <div class="main-content">
+
+        <a href="{{ url_for('index') }}" class="back-link">&laquo; Upload another image</a>
+
+        <!-- summary stats -->
+        <div class="stats-row">
+            <div class="stat-box">
+                <div class="stat-val">{{ results.num_detections }}</div>
+                <div class="stat-lbl">Objects Found</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-val">{{ results.inference_time_ms }}ms</div>
+                <div class="stat-lbl">Inference Time</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-val" style="font-size:11px; word-break:break-all;">{{ results.image_name }}</div>
+                <div class="stat-lbl">File Name</div>
+            </div>
+        </div>
+
+        <!-- images side by side -->
+        <div class="window">
+            <div class="window-titlebar">
+                <span class="title-text">&#128444; Detection Results - {{ results.image_name }}</span>
+                <div class="window-controls">
+                    <div class="window-btn">_</div>
+                    <div class="window-btn">&#9633;</div>
+                    <div class="window-btn">&#10005;</div>
+                </div>
+            </div>
+            <div class="window-body">
+                <div class="results-grid">
+                    <div class="image-box">
+                        <div class="img-label">&#128204; Classified Image</div>
+                        <img src="{{ url_for('static', filename=results.result_image) }}"
+                            alt="Image with bounding boxes">
+                    </div>
+                    <div class="image-box">
+                        <div class="img-label">&#128247; Original Image</div>
+                        <img src="{{ url_for('static', filename=results.original_image) }}"
+                            alt="Original uploaded image">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- detection table -->
+        <div class="window">
+            <div class="window-titlebar">
+                <span class="title-text">&#128203; Detection Details</span>
+                <div class="window-controls">
+                    <div class="window-btn">_</div>
+                    <div class="window-btn">&#9633;</div>
+                    <div class="window-btn">&#10005;</div>
+                </div>
+            </div>
+            <div class="window-body">
+                {% if results.detections|length > 0 %}
+                <table class="win-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Image Name</th>
+                            <th>Object Detected</th>
+                            <th>Probability</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for det in results.detections %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ results.image_name }}</td>
+                            <td>{{ det.class_name }}</td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <div class="prob-outer" style="width:80px;">
+                                        <div class="prob-inner" style="width:{{ (det.score * 100)|round(1) }}%;"></div>
+                                    </div>
+                                    <span>{{ (det.score * 100)|round(1) }}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    &#128530; No objects detected above the confidence threshold.
+                </div>
+                {% endif %}
+
+                <div class="btn-row" style="margin-top: 16px;">
+                    <a href="{{ url_for('index') }}" class="win-btn win-btn-primary"
+                        style="text-decoration:none; display:inline-block;">Upload Another</a>
+                    <a href="{{ url_for('metrics') }}" class="win-btn"
+                        style="text-decoration:none; display:inline-block;">View Metrics</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- taskbar -->
+    <div class="taskbar">
+        <a href="{{ url_for('index') }}" class="start-btn">
+            <div class="win-logo">
+                <div class="r"></div>
+                <div class="g"></div>
+                <div class="b"></div>
+                <div class="y"></div>
+            </div>
+            Start
+        </a>
+        <div class="taskbar-divider"></div>
+        <ul class="taskbar-links">
+            <li><a href="{{ url_for('index') }}" class="taskbar-link">&#128194; Upload</a></li>
+            <li><a href="{{ url_for('metrics') }}" class="taskbar-link">&#128202; Metrics</a></li>
+        </ul>
+        <div class="taskbar-clock" id="clock"></div>
+    </div>
+
+    <script>
+        // taskbar clock
+        function updateClock() {
+            var now = new Date();
+            var h = now.getHours() % 12 || 12;
+            var m = now.getMinutes();
+            m = m < 10 ? '0' + m : m;
+            document.getElementById('clock').textContent = h + ':' + m + (now.getHours() >= 12 ? ' PM' : ' AM');
+        }
+        updateClock();
+        setInterval(updateClock, 30000);
+    </script>
+
+</body>
+
+</html>

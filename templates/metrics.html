@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection - Metrics</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <div class="main-content">
+
+        <div class="window">
+            <div class="window-titlebar">
+                <span class="title-text">&#128202; Inference Metrics Dashboard</span>
+                <div class="window-controls">
+                    <div class="window-btn">_</div>
+                    <div class="window-btn">&#9633;</div>
+                    <div class="window-btn">&#10005;</div>
+                </div>
+            </div>
+            <div class="window-body">
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <div class="m-val">{{ metrics.total_requests }}</div>
+                        <div class="m-lbl">Total Requests</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="m-val">{{ metrics.successful_requests }}</div>
+                        <div class="m-lbl">Successful</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="m-val">{{ metrics.failed_requests }}</div>
+                        <div class="m-lbl">Failed</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="m-val">{{ metrics.success_rate }}%</div>
+                        <div class="m-lbl">Success Rate</div>
+                    </div>
+                </div>
+
+                <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-box">
+                        <div class="m-val">{{ metrics.avg_inference_time_ms }}ms</div>
+                        <div class="m-lbl">Avg Latency</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="m-val">{{ metrics.total_objects_detected }}</div>
+                        <div class="m-lbl">Total Objects Detected</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="m-val">{{ metrics.model_name }}</div>
+                        <div class="m-lbl">Model</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- class distribution -->
+        <div class="window">
+            <div class="window-titlebar">
+                <span class="title-text">&#128200; Detection Class Distribution</span>
+                <div class="window-controls">
+                    <div class="window-btn">_</div>
+                    <div class="window-btn">&#9633;</div>
+                    <div class="window-btn">&#10005;</div>
+                </div>
+            </div>
+            <div class="window-body">
+                {% if metrics.class_distribution|length > 0 %}
+                {% set max_count = metrics.class_distribution[0][1] %}
+                {% for class_name, count in metrics.class_distribution %}
+                <div class="class-row">
+                    <span class="class-name">{{ class_name }}</span>
+                    <div class="class-bar-outer">
+                        <div class="class-bar-inner" style="width: {{ (count / max_count * 100)|round }}%;">
+                            {{ count }}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    No detections yet. Upload an image to start.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- recent inferences log -->
+        <div class="window">
+            <div class="window-titlebar">
+                <span class="title-text">&#128203; Recent Inference Log</span>
+                <div class="window-controls">
+                    <div class="window-btn">_</div>
+                    <div class="window-btn">&#9633;</div>
+                    <div class="window-btn">&#10005;</div>
+                </div>
+            </div>
+            <div class="window-body">
+                {% if metrics.recent_inferences|length > 0 %}
+                <table class="win-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Latency</th>
+                            <th>Objects</th>
+                            <th>Classes Found</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inf in metrics.recent_inferences|reverse %}
+                        <tr>
+                            <td>{{ inf.timestamp }}</td>
+                            <td>{{ inf.inference_time_ms }}ms</td>
+                            <td>{{ inf.objects_detected }}</td>
+                            <td>{{ inf.classes|join(', ') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    No inference history yet.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- grafana and prometheus links -->
+        <div class="window">
+            <div class="window-titlebar">
+                <span class="title-text">&#128279; Monitoring Tools</span>
+                <div class="window-controls">
+                    <div class="window-btn">_</div>
+                    <div class="window-btn">&#9633;</div>
+                    <div class="window-btn">&#10005;</div>
+                </div>
+            </div>
+            <div class="window-body">
+                <!-- grafana -->
+                <p style="margin-bottom: 8px; font-size: 11px;">
+                    Live Grafana dashboard (powered by Prometheus):
+                </p>
+                <div style="border: 2px inset #808080; margin-bottom: 12px;">
+                    <iframe
+                        src="http://localhost:3000/d/object-detection-mlops/object-detection-mlops-dashboard?orgId=1&kiosk"
+                        width="100%" height="400" frameborder="0" style="display:block; background:#fff;">
+                    </iframe>
+                </div>
+
+                <div class="config-grid">
+                    <div class="config-row">
+                        <span class="config-key">Grafana</span>
+                        <a href="http://localhost:3000" target="_blank" class="link-btn">localhost:3000</a>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-key">Prometheus</span>
+                        <a href="http://localhost:9090" target="_blank" class="link-btn">localhost:9090</a>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-key">Raw Metrics</span>
+                        <a href="/prometheus_metrics" target="_blank" class="link-btn">/prometheus_metrics</a>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-key">TF Serving</span>
+                        <a href="http://localhost:8501/monitoring/prometheus/metrics" target="_blank"
+                            class="link-btn">localhost:8501</a>
+                    </div>
+                </div>
+
+                <div class="config-grid" style="margin-top: 8px;">
+                    <div class="config-row">
+                        <span class="config-key">Service Started</span>
+                        <span class="config-val">{{ metrics.service_start_time }}</span>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-key">Last Inference</span>
+                        <span class="config-val">{{ metrics.last_inference_time }}</span>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-key">Threshold</span>
+                        <span class="config-val">{{ metrics.confidence_threshold }}</span>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-key">Model</span>
+                        <span class="config-val">{{ metrics.model_name }}</span>
+                    </div>
+                </div>
+
+                <div class="btn-row" style="margin-top: 12px;">
+                    <a href="{{ url_for('metrics') }}" class="win-btn" style="text-decoration:none;">&#8635; Refresh</a>
+                    <a href="{{ url_for('index') }}" class="win-btn" style="text-decoration:none;">Upload Image</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- taskbar -->
+    <div class="taskbar">
+        <a href="{{ url_for('index') }}" class="start-btn">
+            <div class="win-logo">
+                <div class="r"></div>
+                <div class="g"></div>
+                <div class="b"></div>
+                <div class="y"></div>
+            </div>
+            Start
+        </a>
+        <div class="taskbar-divider"></div>
+        <ul class="taskbar-links">
+            <li><a href="{{ url_for('index') }}" class="taskbar-link">&#128194; Upload</a></li>
+            <li><a href="{{ url_for('metrics') }}" class="taskbar-link active">&#128202; Metrics</a></li>
+        </ul>
+        <div class="taskbar-clock" id="clock"></div>
+    </div>
+
+    <script>
+        function updateClock() {
+            var now = new Date();
+            var h = now.getHours() % 12 || 12;
+            var m = now.getMinutes();
+            m = m < 10 ? '0' + m : m;
+            document.getElementById('clock').textContent = h + ':' + m + (now.getHours() >= 12 ? ' PM' : ' AM');
+        }
+        updateClock();
+        setInterval(updateClock, 30000);
+    </script>
+
+</body>
+
+</html>

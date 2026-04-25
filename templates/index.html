@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<!-- index.html - upload page styled like windows 97 -->
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection - Upload</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <!-- loading overlay - shows the retro email animation while inference runs -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-window">
+            <div class="window-titlebar">
+                <span class="title-text">&#128232; Sending image to model server...</span>
+                <div class="window-controls">
+                    <div class="window-btn">_</div>
+                    <div class="window-btn">&#9633;</div>
+                    <div class="window-btn">&#10005;</div>
+                </div>
+            </div>
+            <div class="loading-body">
+                <!-- pixel art animation scene -->
+                <div class="email-scene">
+                    <!-- left computer (flask app) -->
+                    <div class="computer computer-left">
+                        <div class="monitor">
+                            <div class="screen screen-on"></div>
+                        </div>
+                        <div class="monitor-stand"></div>
+                        <div class="monitor-base"></div>
+                        <div class="pc-label">Flask App</div>
+                    </div>
+
+                    <!-- flying envelope -->
+                    <div class="envelope">
+                        <div class="envelope-body">
+                            <div class="envelope-flap"></div>
+                            <div class="envelope-flap-inner"></div>
+                        </div>
+                    </div>
+                    <div class="fly-line"></div>
+                    <div class="fly-line"></div>
+                    <div class="fly-line"></div>
+
+                    <!-- right computer (tf serving) -->
+                    <div class="computer computer-right">
+                        <div class="monitor">
+                            <div class="screen screen-on"></div>
+                        </div>
+                        <div class="monitor-stand"></div>
+                        <div class="monitor-base"></div>
+                        <div class="pc-label">TF Serving</div>
+                    </div>
+                </div>
+
+                <p class="loading-text">
+                    Sending image via gRPC<span class="loading-dots"></span>
+                </p>
+
+                <div class="progress-outer">
+                    <div class="progress-inner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- main page content -->
+    <div class="main-content">
+
+        <!-- upload window -->
+        <div class="window">
+            <div class="window-titlebar">
+                <span class="title-text">&#128194; Object Detection - Upload Image</span>
+                <div class="window-controls">
+                    <div class="window-btn">_</div>
+                    <div class="window-btn">&#9633;</div>
+                    <div class="window-btn">&#10005;</div>
+                </div>
+            </div>
+            <div class="window-body">
+
+                <!-- error messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="flash-msg {{ category }}">
+                    &#9888; {{ message }}
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <p style="margin-bottom: 8px;">
+                    Select an image file to run object detection. Accepted formats: .jpg, .jpeg, .png
+                </p>
+
+                <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
+
+                    <!-- clickable upload area -->
+                    <div class="upload-zone" onclick="document.getElementById('fileInput').click();">
+                        <span class="folder-icon">&#128193;</span>
+                        <p><b>Click here to browse for an image</b></p>
+                        <p style="font-size: 10px; color: #808080;">or drag and drop
+                        </p>
+                    </div>
+
+                    <input type="file" id="fileInput" name="image" accept=".jpg,.jpeg,.png" style="display:none;"
+                        required>
+
+                    <div class="file-info" id="fileInfo">No file selected</div>
+
+                    <div class="btn-row">
+                        <button type="submit" class="win-btn win-btn-primary" id="submitBtn" disabled>
+                            Analyse Image
+                        </button>
+                        <button type="reset" class="win-btn" onclick="resetForm()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- taskbar -->
+    <div class="taskbar">
+        <a href="{{ url_for('index') }}" class="start-btn">
+            <div class="win-logo">
+                <div class="r"></div>
+                <div class="g"></div>
+                <div class="b"></div>
+                <div class="y"></div>
+            </div>
+            Start
+        </a>
+        <div class="taskbar-divider"></div>
+        <ul class="taskbar-links">
+            <li><a href="{{ url_for('index') }}" class="taskbar-link active">&#128194; Upload</a></li>
+            <li><a href="{{ url_for('metrics') }}" class="taskbar-link">&#128202; Metrics</a></li>
+        </ul>
+        <div class="taskbar-clock" id="clock"></div>
+    </div>
+
+    <script>
+        // file validation
+        var fileInput = document.getElementById('fileInput');
+        var fileInfo = document.getElementById('fileInfo');
+        var submitBtn = document.getElementById('submitBtn');
+        var allowed = ['jpg', 'jpeg', 'png'];
+
+        fileInput.addEventListener('change', function () {
+            if (this.files.length > 0) {
+                var name = this.files[0].name;
+                var ext = name.split('.').pop().toLowerCase();
+                if (allowed.indexOf(ext) !== -1) {
+                    fileInfo.textContent = 'Selected: ' + name;
+                    fileInfo.style.color = '#008000';
+                    submitBtn.disabled = false;
+                } else {
+                    fileInfo.textContent = 'Error: Invalid file type!';
+                    fileInfo.style.color = '#aa0000';
+                    submitBtn.disabled = true;
+                    this.value = '';
+                }
+            }
+        });
+
+        function resetForm() {
+            fileInfo.textContent = 'No file selected';
+            fileInfo.style.color = '#444';
+            submitBtn.disabled = true;
+        }
+
+        // show loading animation when form submits
+        document.getElementById('uploadForm').addEventListener('submit', function () {
+            document.getElementById('loadingOverlay').classList.add('active');
+        });
+
+        // taskbar clock
+        function updateClock() {
+            var now = new Date();
+            var h = now.getHours();
+            var m = now.getMinutes();
+            var ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12;
+            if (h === 0) h = 12;
+            m = m < 10 ? '0' + m : m;
+            document.getElementById('clock').textContent = h + ':' + m + ' ' + ampm;
+        }
+        updateClock();
+        setInterval(updateClock, 30000);
+    </script>
+
+</body>
+
+</html>

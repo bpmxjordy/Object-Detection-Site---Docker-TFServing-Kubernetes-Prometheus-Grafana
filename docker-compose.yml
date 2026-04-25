@@ -1,0 +1,99 @@
+#   User -> Flask (5000) -> TF Serving gRPC (8500)
+#   Prometheus (9090) scrapes Flask and TF Serving
+#   Grafana (3000) queries Prometheus and displays metric dashboards
+
+version: "3.8"
+
+services:
+
+  # TensorFlow Serving - Model Server - gRPC on port 8500
+  tf-serving:
+    image: tensorflow/serving:latest-gpu
+    container_name: tf_serving
+    ports:
+      - "8500:8500" # gRPC port for Flask backend communication
+      - "8501:8501" # REST port
+    volumes:
+      - ./models/ssd_mobilenet_v2:/models/ssd_mobilenet_v2
+    environment:
+      - MODEL_NAME=ssd_mobilenet_v2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    restart: unless-stopped
+    networks:
+      - detection-network
+
+  # Flask Web Application - Frontend & Backend
+  flask-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flask_app
+    ports:
+      - "5000:5000" # Flask web server
+    environment:
+      - TF_SERVING_HOST=tf-serving
+      - TF_SERVING_PORT=8500
+      - MODEL_NAME=ssd_mobilenet_v2
+      - CONFIDENCE_THRESHOLD=0.5
+    depends_on:
+      - tf-serving
+    restart: unless-stopped
+    networks:
+      - detection-network
+
+  # Prometheus - Metrics Collection and Storage
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    ports:
+      - "9090:9090" # Prometheus web UI and API
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Persistent volume for metrics data
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    depends_on:
+      - flask-app
+      - tf-serving
+    restart: unless-stopped
+    networks:
+      - detection-network
+
+  # Grafana - Metrics Visualisation Dashboard
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    ports:
+      - "3000:3000" # Grafana dashboard UI
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - detection-network
+
+networks:
+  detection-network:
+    driver: bridge
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

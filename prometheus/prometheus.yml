@@ -1,0 +1,33 @@
+# Prometheus scrapes the targets at regular intervals to collect metrics.
+# These metrics are stored in Prometheus's time-series
+# database and can be queried or visualised in Grafana.
+
+global:
+  # How frequently Prometheus scrapes
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # Flask Application Metrics
+  - job_name: "flask-app"
+    metrics_path: "/prometheus_metrics"
+    static_configs:
+      - targets: ["flask-app:5000"]
+        labels:
+          service: "flask-object-detection"
+          environment: "production"
+
+  # TensorFlow Serving Metrics
+  - job_name: "tf-serving"
+    metrics_path: "/monitoring/prometheus/metrics"
+    static_configs:
+      - targets: ["tf-serving:8501"]
+        labels:
+          service: "tensorflow-serving"
+          environment: "production"
+
+  # Prometheus Self-Monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

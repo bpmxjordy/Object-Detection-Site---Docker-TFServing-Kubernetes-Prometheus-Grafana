@@ -1,0 +1,130 @@
+
+# Deploys the Flask web application with auto-scaling capabilities.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-app
+  namespace: object-detection
+  labels:
+    app: flask-app
+    component: web-frontend
+spec:
+  # Initial number of replicas
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flask-app
+  template:
+    metadata:
+      labels:
+        app: flask-app
+        component: web-frontend
+      # Annotations that are used for Prometheus scraping of the Flask app metrics
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/prometheus_metrics"
+    spec:
+      containers:
+        - name: flask-app
+          # Docker image built from the Flask Dockerfile
+          image: flask-object-detection:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              name: http
+              protocol: TCP
+          env:
+            # TF Serving hostname resolves via Kubernetes internal DNS
+            # Points to the tf-serving Service from the tf-serving yml file
+            - name: TF_SERVING_HOST
+              value: "tf-serving"
+            - name: TF_SERVING_PORT
+              value: "8500"
+            - name: MODEL_NAME
+              value: "ssd_mobilenet_v2"
+            - name: CONFIDENCE_THRESHOLD
+              value: "0.5"
+            # Secret key loaded from a Kubernetes Secret
+            - name: FLASK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: flask-secrets
+                  key: secret-key
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          # Readiness probe to see if the Flask app is ready to serve traffic
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          # Liveness probe will restart the pod if Flask becomes unresponsive
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+---
+# Service exposes the Flask app to external traffic via LoadBalancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-app
+  namespace: object-detection
+  labels:
+    app: flask-app
+spec:
+  selector:
+    app: flask-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+      protocol: TCP
+  type: LoadBalancer
+
+---
+# HorizontalPodAutoscaler will auto-scale theFlask pods based on CPU usage
+# When CPU exceeds 70%, Kubernetes will add more pods up to the maxReplicas variable
+# When load drops, pods are removed down to the minReplicas variable
+# This implements the auto-scaling described in my paper
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: flask-app-hpa
+  namespace: object-detection
+  labels:
+    app: flask-app
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: flask-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    # Scale based on CPU utilisation
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Scale based on memory utilisation
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
